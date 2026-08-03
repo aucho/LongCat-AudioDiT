@@ -117,6 +117,24 @@ python batch_inference.py \
     --guidance_method apg
 ```
 
+## Gradio Demo
+
+The Gradio page supports both text-to-speech and zero-shot voice cloning. The
+voice-cloning tab requires the uploaded sample audio, its matching transcript,
+and the text to synthesize.
+
+```bash
+python gradio_app.py
+```
+
+The default model is `meituan-longcat/LongCat-AudioDiT-3.5B`; it listens on
+`0.0.0.0:7860` for LAN access. Use a local model directory or another compatible
+Hugging Face model with `--model_dir`, and select a device or port when needed:
+
+```bash
+python gradio_app.py --model_dir /path/to/model --device cuda:0 --port 7860
+```
+
 ## Inference (Python API)
 
 ### 1. TTS
