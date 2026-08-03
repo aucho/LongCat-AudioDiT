@@ -1,23 +1,27 @@
 """Gradio demo for LongCat-AudioDiT text-to-speech and voice cloning.
 
 Example:
-    python gradio_app.py --model_dir meituan-longcat/LongCat-AudioDiT-3.5B
+    python gradio_app.py --model_dir meituan-longcat/LongCat-AudioDiT-1B
 """
 
 import argparse
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 import gradio as gr
 import numpy as np
+import soundfile as sf
 import torch
 from transformers import AutoTokenizer
 
 import audiodit  # Registers AudioDiT with Transformers.
 from audiodit import AudioDiTModel
+from long_audio import TextSegment, segment_text, stitch_audio_files
 from utils import approx_duration_from_text, load_audio, normalize_text
 
 
-DEFAULT_MODEL_DIR = "meituan-longcat/LongCat-AudioDiT-3.5B"
+DEFAULT_MODEL_DIR = "meituan-longcat/LongCat-AudioDiT-1B"
 
 _model: Optional[AudioDiTModel] = None
 _tokenizer = None
@@ -150,6 +154,104 @@ def generate_voice_clone(
     )
 
 
+def _segment_rows(segments: list[TextSegment]):
+    return [
+        [index + 1, segment.text, round(segment.estimated_seconds, 2), segment.boundary]
+        for index, segment in enumerate(segments)
+    ]
+
+
+def preview_long_text(
+    text: str, language: str, target_seconds: float, max_seconds: float
+):
+    try:
+        return _segment_rows(
+            segment_text(text, language, target_seconds, max_seconds)
+        )
+    except (ValueError, RuntimeError) as error:
+        raise gr.Error(str(error)) from error
+
+
+def generate_long_audio(
+    text: str,
+    language: str,
+    prompt_audio_path: Optional[str],
+    prompt_text: Optional[str],
+    target_seconds: float,
+    max_seconds: float,
+    steps: int,
+    guidance_method: str,
+    guidance_strength: float,
+):
+    model, _, _ = _require_model()
+    has_audio = bool(prompt_audio_path)
+    has_prompt_text = bool((prompt_text or "").strip())
+    if has_audio != has_prompt_text:
+        raise gr.Error("样本音频和样本音频转写必须同时提供。")
+
+    effective_max = min(float(max_seconds), float(model.config.max_wav_duration))
+    if has_audio:
+        normalized_prompt = _normalized_required(prompt_text or "", "样本音频转写")
+        prompt_wav = load_audio(prompt_audio_path, model.config.sampling_rate).unsqueeze(0)
+        with torch.inference_mode():
+            _, prompt_frames = model.encode_prompt_audio(prompt_wav)
+        prompt_seconds = (
+            prompt_frames * model.config.latent_hop / model.config.sampling_rate
+        )
+        estimated_prompt = approx_duration_from_text(
+            normalized_prompt, max_duration=model.config.max_wav_duration
+        )
+        speed_ratio = float(np.clip(prompt_seconds / estimated_prompt, 1.0, 1.5))
+        effective_max = min(
+            effective_max,
+            (model.config.max_wav_duration - prompt_seconds) / speed_ratio,
+        )
+    if effective_max <= 0:
+        raise gr.Error("样本音频已占满模型的最大时长，无法生成新内容。")
+    effective_target = min(float(target_seconds), effective_max)
+
+    try:
+        segments = segment_text(text, language, effective_target, effective_max)
+    except (ValueError, RuntimeError) as error:
+        raise gr.Error(str(error)) from error
+
+    job_dir = Path(tempfile.mkdtemp(prefix="longcat_long_"))
+    wav_files: list[Path] = []
+    for index, segment in enumerate(segments):
+        # Reusing the seed keeps prompt VAE sampling and initial noise consistent
+        # across independently generated segments.
+        torch.manual_seed(1024)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(1024)
+        sample_rate, waveform = generate_audio(
+            segment.text,
+            prompt_audio_path=prompt_audio_path,
+            prompt_text=prompt_text,
+            steps=steps,
+            guidance_method=guidance_method,
+            guidance_strength=guidance_strength,
+        )
+        wav_path = job_dir / f"segment_{index:06d}.wav"
+        sf.write(wav_path, waveform, sample_rate, subtype="PCM_16")
+        wav_files.append(wav_path)
+
+    output_mp3 = job_dir / "longcat_output.mp3"
+    try:
+        stitch_audio_files(
+            wav_files,
+            [segment.boundary for segment in segments],
+            output_mp3,
+            bitrate="192k",
+            sample_rate=model.config.sampling_rate,
+        )
+    except (ValueError, FileNotFoundError, RuntimeError) as error:
+        raise gr.Error(str(error)) from error
+    for wav_path in wav_files:
+        wav_path.unlink()
+    rows = _segment_rows(segments)
+    return rows, str(output_mp3), str(output_mp3)
+
+
 def create_demo() -> gr.Blocks:
     """Construct the UI without loading a model, enabling lightweight imports/tests."""
     with gr.Blocks(title="LongCat-AudioDiT") as demo:
@@ -180,6 +282,57 @@ def create_demo() -> gr.Blocks:
                 generate_voice_clone,
                 inputs=[clone_text, prompt_audio, prompt_text, steps, guidance_method, guidance_strength],
                 outputs=clone_output,
+            )
+
+        with gr.Tab("长文本生成"):
+            gr.Markdown(
+                "面向英语/西语长文本。分段后由本地模型串行生成，最终输出 192 kbps MP3。"
+            )
+            long_text = gr.Textbox(label="长文本", lines=10)
+            with gr.Row():
+                language = gr.Radio(
+                    [("English", "en"), ("Español", "es")],
+                    value="en",
+                    label="语言",
+                )
+                target_seconds = gr.Slider(
+                    5, 18, value=15, step=1, label="目标分段时长（秒）"
+                )
+                max_seconds = gr.Slider(
+                    8, 20, value=20, step=1, label="最大分段时长（秒）"
+                )
+            long_prompt_audio = gr.Audio(label="样本音频（可选）", type="filepath")
+            long_prompt_text = gr.Textbox(label="样本音频转写（可选）", lines=3)
+            with gr.Row():
+                preview_button = gr.Button("预览分段")
+                long_generate_button = gr.Button("生成完整 MP3", variant="primary")
+            segment_table = gr.Dataframe(
+                headers=["序号", "文本", "预计秒数", "边界"],
+                datatype=["number", "str", "number", "str"],
+                interactive=False,
+                label="分段结果",
+            )
+            long_audio_output = gr.Audio(label="完整 MP3", type="filepath")
+            long_file_output = gr.File(label="下载 MP3")
+            preview_button.click(
+                preview_long_text,
+                inputs=[long_text, language, target_seconds, max_seconds],
+                outputs=segment_table,
+            )
+            long_generate_button.click(
+                generate_long_audio,
+                inputs=[
+                    long_text,
+                    language,
+                    long_prompt_audio,
+                    long_prompt_text,
+                    target_seconds,
+                    max_seconds,
+                    steps,
+                    guidance_method,
+                    guidance_strength,
+                ],
+                outputs=[segment_table, long_audio_output, long_file_output],
             )
     return demo
 

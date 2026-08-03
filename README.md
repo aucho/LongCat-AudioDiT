@@ -135,6 +135,12 @@ Hugging Face model with `--model_dir`, and select a device or port when needed:
 python gradio_app.py --model_dir /path/to/model --device cuda:0 --port 7860
 ```
 
+The **Long Text Generation** tab segments English or Spanish text, generates
+each segment with the locally loaded model, and streams the temporary WAV files
+through FFmpeg into one 24 kHz mono 192 kbps MP3. It is intended for functional
+testing; external inference APIs, queues, and interrupted-job recovery are not
+included.
+
 ## Inference (Python API)
 
 ### 1. TTS

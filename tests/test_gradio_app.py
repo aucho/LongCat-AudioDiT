@@ -1,5 +1,6 @@
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import torch
@@ -58,6 +59,34 @@ class GradioAppTest(unittest.TestCase):
         self.assertTrue(load_audio.called)
         self.assertIsNotNone(self.model.calls[-1]["prompt_audio"])
         self.assertGreater(self.model.calls[-1]["duration"], 4)
+
+    @patch("gradio_app.stitch_audio_files")
+    @patch("gradio_app.generate_audio", return_value=(24000, torch.zeros(16).numpy()))
+    def test_long_audio_generates_each_segment_and_returns_mp3(
+        self, generate_audio, stitch_audio_files
+    ):
+        def create_mp3(files, boundaries, output, **kwargs):
+            del files, boundaries, kwargs
+            Path(output).write_bytes(b"mp3")
+            return Path(output)
+
+        stitch_audio_files.side_effect = create_mp3
+        rows, audio_path, file_path = gradio_app.generate_long_audio(
+            "First sentence. Second sentence.",
+            "en",
+            None,
+            None,
+            2,
+            3,
+            16,
+            "cfg",
+            4.0,
+        )
+
+        self.assertGreaterEqual(generate_audio.call_count, 2)
+        self.assertEqual(audio_path, file_path)
+        self.assertTrue(Path(file_path).is_file())
+        self.assertEqual(len(rows), generate_audio.call_count)
 
 
 if __name__ == "__main__":

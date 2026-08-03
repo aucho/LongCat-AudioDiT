@@ -1,8 +1,9 @@
 import re
-import librosa
-import torch
 
 def load_audio(wavpath, sr):
+    import librosa
+    import torch
+
     audio, _ = librosa.load(wavpath, sr=sr, mono=True)
     return torch.from_numpy(audio).unsqueeze(0)
 
