@@ -186,26 +186,25 @@ def generate_long_audio(
     model, _, _ = _require_model()
     has_audio = bool(prompt_audio_path)
     has_prompt_text = bool((prompt_text or "").strip())
-    if has_audio != has_prompt_text:
-        raise gr.Error("样本音频和样本音频转写必须同时提供。")
+    if not has_audio or not has_prompt_text:
+        raise gr.Error("长文本生成必须提供样本音频及其准确转写。")
 
     effective_max = min(float(max_seconds), float(model.config.max_wav_duration))
-    if has_audio:
-        normalized_prompt = _normalized_required(prompt_text or "", "样本音频转写")
-        prompt_wav = load_audio(prompt_audio_path, model.config.sampling_rate).unsqueeze(0)
-        with torch.inference_mode():
-            _, prompt_frames = model.encode_prompt_audio(prompt_wav)
-        prompt_seconds = (
-            prompt_frames * model.config.latent_hop / model.config.sampling_rate
-        )
-        estimated_prompt = approx_duration_from_text(
-            normalized_prompt, max_duration=model.config.max_wav_duration
-        )
-        speed_ratio = float(np.clip(prompt_seconds / estimated_prompt, 1.0, 1.5))
-        effective_max = min(
-            effective_max,
-            (model.config.max_wav_duration - prompt_seconds) / speed_ratio,
-        )
+    normalized_prompt = _normalized_required(prompt_text or "", "样本音频转写")
+    prompt_wav = load_audio(prompt_audio_path, model.config.sampling_rate).unsqueeze(0)
+    with torch.inference_mode():
+        _, prompt_frames = model.encode_prompt_audio(prompt_wav)
+    prompt_seconds = (
+        prompt_frames * model.config.latent_hop / model.config.sampling_rate
+    )
+    estimated_prompt = approx_duration_from_text(
+        normalized_prompt, max_duration=model.config.max_wav_duration
+    )
+    speed_ratio = float(np.clip(prompt_seconds / estimated_prompt, 1.0, 1.5))
+    effective_max = min(
+        effective_max,
+        (model.config.max_wav_duration - prompt_seconds) / speed_ratio,
+    )
     if effective_max <= 0:
         raise gr.Error("样本音频已占满模型的最大时长，无法生成新内容。")
     effective_target = min(float(target_seconds), effective_max)
@@ -286,7 +285,8 @@ def create_demo() -> gr.Blocks:
 
         with gr.Tab("长文本生成"):
             gr.Markdown(
-                "面向英语/西语长文本。分段后由本地模型串行生成，最终输出 192 kbps MP3。"
+                "面向英语/西语长文本。每个分段都使用同一份样本音频进行音色克隆，"
+                "最终输出 192 kbps MP3。"
             )
             long_text = gr.Textbox(label="长文本", lines=10)
             with gr.Row():
@@ -301,8 +301,8 @@ def create_demo() -> gr.Blocks:
                 max_seconds = gr.Slider(
                     8, 20, value=20, step=1, label="最大分段时长（秒）"
                 )
-            long_prompt_audio = gr.Audio(label="样本音频（可选）", type="filepath")
-            long_prompt_text = gr.Textbox(label="样本音频转写（可选）", lines=3)
+            long_prompt_audio = gr.Audio(label="样本音频（必填）", type="filepath")
+            long_prompt_text = gr.Textbox(label="样本音频准确转写（必填）", lines=3)
             with gr.Row():
                 preview_button = gr.Button("预览分段")
                 long_generate_button = gr.Button("生成完整 MP3", variant="primary")

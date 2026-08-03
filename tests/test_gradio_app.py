@@ -62,8 +62,9 @@ class GradioAppTest(unittest.TestCase):
 
     @patch("gradio_app.stitch_audio_files")
     @patch("gradio_app.generate_audio", return_value=(24000, torch.zeros(16).numpy()))
+    @patch("gradio_app.load_audio", return_value=torch.zeros(1, 2048))
     def test_long_audio_generates_each_segment_and_returns_mp3(
-        self, generate_audio, stitch_audio_files
+        self, load_audio, generate_audio, stitch_audio_files
     ):
         def create_mp3(files, boundaries, output, **kwargs):
             del files, boundaries, kwargs
@@ -74,8 +75,8 @@ class GradioAppTest(unittest.TestCase):
         rows, audio_path, file_path = gradio_app.generate_long_audio(
             "First sentence. Second sentence.",
             "en",
-            None,
-            None,
+            "sample.wav",
+            "sample transcript",
             2,
             3,
             16,
@@ -84,9 +85,19 @@ class GradioAppTest(unittest.TestCase):
         )
 
         self.assertGreaterEqual(generate_audio.call_count, 2)
+        self.assertTrue(load_audio.called)
+        self.assertTrue(
+            all(call.kwargs["prompt_audio_path"] == "sample.wav" for call in generate_audio.call_args_list)
+        )
         self.assertEqual(audio_path, file_path)
         self.assertTrue(Path(file_path).is_file())
         self.assertEqual(len(rows), generate_audio.call_count)
+
+    def test_long_audio_requires_voice_clone_inputs(self):
+        with self.assertRaisesRegex(gradio_app.gr.Error, "必须提供样本音频"):
+            gradio_app.generate_long_audio(
+                "First sentence.", "en", None, None, 15, 20, 16, "cfg", 4.0
+            )
 
 
 if __name__ == "__main__":
