@@ -23,6 +23,8 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(inference_args.language, "en")
         self.assertEqual(batch_args.language, "en")
         self.assertEqual(inference_args.model_dir, DEFAULT_MODEL_DIR)
+        self.assertEqual(inference_args.speech_rate, 1.3)
+        self.assertEqual(batch_args.speech_rate, 1.3)
 
 
 if __name__ == "__main__":

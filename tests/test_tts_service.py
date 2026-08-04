@@ -59,6 +59,18 @@ class AudioDiTServiceTest(unittest.TestCase):
         self.assertIsNone(self.model.calls[-1]["prompt_audio"])
         self.assertGreater(self.model.calls[-1]["duration"], 10)
 
+    def test_default_speech_rate_is_slightly_faster(self):
+        self.service.generate_tts("This is a sentence.", speech_rate=1.0)
+        original_duration = self.model.calls[-1]["duration"]
+        self.service.generate_tts("This is a sentence.")
+        faster_duration = self.model.calls[-1]["duration"]
+
+        self.assertLess(faster_duration, original_duration)
+
+    def test_speech_rate_must_be_positive(self):
+        with self.assertRaisesRegex(ValueError, "speech_rate"):
+            self.service.generate_tts("Hello.", speech_rate=0)
+
     @patch("services.tts_service.load_audio", return_value=torch.zeros(1, 2048))
     def test_voice_clone_normalizes_prompt_and_generated_text(self, load_audio):
         self.service.generate_voice_clone(
@@ -111,6 +123,7 @@ class AudioDiTServiceTest(unittest.TestCase):
         for call in generate.call_args_list:
             self.assertEqual(call.args[1], "sample.wav")
             self.assertEqual(call.args[2], "Sample transcript.")
+            self.assertEqual(call.kwargs["speech_rate"], 1.3)
 
     def test_long_audio_requires_voice_clone_inputs(self):
         with self.assertRaisesRegex(ValueError, "prompt audio"):

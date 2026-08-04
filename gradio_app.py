@@ -7,7 +7,12 @@ from typing import Optional
 
 import gradio as gr
 
-from services import AudioDiTService, DEFAULT_MODEL_DIR, resolve_device
+from services import (
+    AudioDiTService,
+    DEFAULT_MODEL_DIR,
+    DEFAULT_SPEECH_RATE,
+    resolve_device,
+)
 from utils import TextSegment
 
 
@@ -36,7 +41,7 @@ def _as_gradio_error(operation):
 def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
     """Construct the page without loading a model at import time."""
 
-    def generate_tts_ui(text, language, steps, method, strength):
+    def generate_tts_ui(text, language, steps, method, strength, speech_rate):
         return _as_gradio_error(
             lambda: _service_or_error(service).generate_tts(
                 text,
@@ -44,11 +49,12 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
                 steps=steps,
                 guidance_method=method,
                 guidance_strength=strength,
+                speech_rate=speech_rate,
             )
         )
 
     def generate_clone_ui(
-        text, language, prompt_audio, prompt_text, steps, method, strength
+        text, language, prompt_audio, prompt_text, steps, method, strength, speech_rate
     ):
         return _as_gradio_error(
             lambda: _service_or_error(service).generate_voice_clone(
@@ -59,6 +65,7 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
                 steps=steps,
                 guidance_method=method,
                 guidance_strength=strength,
+                speech_rate=speech_rate,
             )
         )
 
@@ -81,6 +88,7 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
         steps,
         method,
         strength,
+        speech_rate,
     ):
         def generate():
             segments, output = _service_or_error(service).generate_long_audio(
@@ -93,6 +101,7 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
                 steps,
                 method,
                 strength,
+                speech_rate,
             )
             output_path = str(output)
             return _segment_rows(segments), output_path, output_path
@@ -117,6 +126,14 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
             guidance_strength = gr.Slider(
                 0, 8, value=4.0, step=0.1, label="Guidance strength"
             )
+            speech_rate = gr.Slider(
+                0.8,
+                1.3,
+                value=DEFAULT_SPEECH_RATE,
+                step=0.05,
+                label="Speech rate",
+                info="1.0 is the original pace; 1.3 targets roughly 180 WPM.",
+            )
 
         with gr.Tab("Text synthesis"):
             tts_text = gr.Textbox(label="Text to synthesize", lines=4)
@@ -124,7 +141,14 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
             tts_output = gr.Audio(label="Generated audio", type="numpy")
             tts_button.click(
                 generate_tts_ui,
-                inputs=[tts_text, language, steps, guidance_method, guidance_strength],
+                inputs=[
+                    tts_text,
+                    language,
+                    steps,
+                    guidance_method,
+                    guidance_strength,
+                    speech_rate,
+                ],
                 outputs=tts_output,
             )
 
@@ -147,6 +171,7 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
                     steps,
                     guidance_method,
                     guidance_strength,
+                    speech_rate,
                 ],
                 outputs=clone_output,
             )
@@ -200,6 +225,7 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
                     steps,
                     guidance_method,
                     guidance_strength,
+                    speech_rate,
                 ],
                 outputs=[segment_table, long_audio_output, long_file_output],
             )

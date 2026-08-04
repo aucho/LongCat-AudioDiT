@@ -177,8 +177,15 @@ sample_rate, waveform = service.generate_voice_clone(
     "sample.wav",
     "This sample contains 10 words.",
     language="en",
+    speech_rate=1.3,
 )
 ```
+
+The default `speech_rate` is `1.3`, which shortens only the generated portion's
+target duration and aims for roughly 180 words per minute on typical English or
+Spanish prose. Use `1.0` for the checkpoint's original pace. The Gradio page
+exposes a `0.8`–`1.3` test slider; CLI and batch inference accept
+`--speech_rate`.
 
 ## Inference (Python API)
 

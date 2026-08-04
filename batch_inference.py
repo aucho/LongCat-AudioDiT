@@ -8,7 +8,12 @@ from pathlib import Path
 
 import soundfile as sf
 
-from services import AudioDiTService, DEFAULT_MODEL_DIR, resolve_device
+from services import (
+    AudioDiTService,
+    DEFAULT_MODEL_DIR,
+    DEFAULT_SPEECH_RATE,
+    resolve_device,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -21,6 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=1024)
     parser.add_argument("--nfe", type=int, default=16)
     parser.add_argument("--guidance_strength", type=float, default=4.0)
+    parser.add_argument("--speech_rate", type=float, default=DEFAULT_SPEECH_RATE)
     parser.add_argument(
         "--guidance_method", default="cfg", choices=["cfg", "apg"]
     )
@@ -70,6 +76,7 @@ def main() -> None:
                 steps=args.nfe,
                 guidance_method=args.guidance_method,
                 guidance_strength=args.guidance_strength,
+                speech_rate=args.speech_rate,
                 seed=args.seed,
             )
             sf.write(output_path, waveform, sample_rate)

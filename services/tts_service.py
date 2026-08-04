@@ -22,6 +22,7 @@ from utils import (
 
 
 DEFAULT_MODEL_DIR = "meituan-longcat/LongCat-AudioDiT-3.5B"
+DEFAULT_SPEECH_RATE = 1.3
 
 
 def resolve_device(device_name: Optional[str] = None) -> torch.device:
@@ -89,6 +90,7 @@ class AudioDiTService:
         steps: int = 16,
         guidance_method: str = "cfg",
         guidance_strength: float = 4.0,
+        speech_rate: float = DEFAULT_SPEECH_RATE,
         seed: Optional[int] = None,
     ) -> tuple[int, np.ndarray]:
         """Generate one waveform as ``(sample_rate, mono_float_samples)``."""
@@ -97,6 +99,9 @@ class AudioDiTService:
         guidance_method = (guidance_method or "").lower()
         if guidance_method not in {"cfg", "apg"}:
             raise ValueError("guidance_method must be 'cfg' or 'apg'")
+        speech_rate = float(speech_rate)
+        if speech_rate <= 0:
+            raise ValueError("speech_rate must be greater than 0")
 
         spoken_text = self._spoken_text(text, language, "text")
         sampling_rate = self.model.config.sampling_rate
@@ -107,7 +112,9 @@ class AudioDiTService:
         prompt_wav = None
         prompt_frames = 0
         if prompt_audio_path:
-            spoken_prompt = self._spoken_text(prompt_text or "", language, "prompt transcript")
+            spoken_prompt = self._spoken_text(
+                prompt_text or "", language, "prompt transcript"
+            )
             prompt_wav = load_audio(prompt_audio_path, sampling_rate).unsqueeze(0)
             _, prompt_frames = self.model.encode_prompt_audio(prompt_wav)
             if prompt_frames >= max_frames:
@@ -129,13 +136,18 @@ class AudioDiTService:
             generated_seconds *= duration_ratio
             full_text = f"{spoken_prompt} {spoken_text}"
         elif prompt_text and prompt_text.strip():
-            raise ValueError("prompt audio is required when a prompt transcript is provided")
+            raise ValueError(
+                "prompt audio is required when a prompt transcript is provided"
+            )
         else:
             generated_seconds = approx_duration_from_text(
                 spoken_text, max_duration=max_duration
             )
             full_text = spoken_text
 
+        # AudioDiT has no dedicated pace control. A shorter generated duration
+        # produces faster speech while leaving the reference audio unchanged.
+        generated_seconds /= speech_rate
         duration = int(generated_seconds * sampling_rate // latent_hop) + prompt_frames
         duration = min(duration, max_frames)
         inputs = self.tokenizer([full_text], padding="longest", return_tensors="pt")
@@ -226,6 +238,7 @@ class AudioDiTService:
         steps: int = 16,
         guidance_method: str = "cfg",
         guidance_strength: float = 4.0,
+        speech_rate: float = DEFAULT_SPEECH_RATE,
         seed: int = 1024,
         bitrate: str = "192k",
     ) -> tuple[list[TextSegment], Path]:
@@ -252,6 +265,7 @@ class AudioDiTService:
                     steps=steps,
                     guidance_method=guidance_method,
                     guidance_strength=guidance_strength,
+                    speech_rate=speech_rate,
                     seed=seed,
                 )
                 wav_path = job_dir / f"segment_{index:06d}.wav"
@@ -275,4 +289,9 @@ class AudioDiTService:
                 shutil.rmtree(job_dir, ignore_errors=True)
 
 
-__all__ = ["AudioDiTService", "DEFAULT_MODEL_DIR", "resolve_device"]
+__all__ = [
+    "AudioDiTService",
+    "DEFAULT_MODEL_DIR",
+    "DEFAULT_SPEECH_RATE",
+    "resolve_device",
+]
