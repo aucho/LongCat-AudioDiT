@@ -15,10 +15,10 @@ from .text import approx_duration_from_text
 
 SUPPORTED_LANGUAGES = {"en", "es"}
 BOUNDARY_PAUSES = {
-    "paragraph": 0.40,
-    "sentence": 0.25,
-    "clause": 0.12,
-    "word": 0.08,
+    "paragraph": 0.18,
+    "sentence": 0.12,
+    "clause": 0.09,
+    "word": 0.06,
 }
 
 _ABBREVIATIONS = {

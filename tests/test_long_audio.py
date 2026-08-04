@@ -64,6 +64,12 @@ class StitchAudioTest(unittest.TestCase):
                 lines = concat_path.read_text(encoding="utf-8").splitlines()
                 self.assertEqual(lines, ["file '000000.wav'", "file '000001.wav'"])
                 self.assertEqual(Path(cwd), concat_path.parent)
+                first_processed, first_rate = sf.read(
+                    Path(cwd) / "000000.wav", dtype="float32"
+                )
+                # 240 source samples plus the 0.12-second sentence pause.
+                self.assertEqual(first_rate, 24000)
+                self.assertEqual(len(first_processed), 240 + int(0.12 * 24000))
                 Path(command[-1]).write_bytes(b"mp3")
                 return subprocess.CompletedProcess(command, 0)
 

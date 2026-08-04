@@ -142,6 +142,9 @@ each segment with the locally loaded model and the same required voice-cloning
 sample/transcript, then streams the temporary WAV files through FFmpeg into one
 24 kHz mono 192 kbps MP3. It is intended for functional testing; external
 inference APIs, queues, and interrupted-job recovery are not included.
+Long-text stitching adds compact pauses of 0.12 seconds between sentences and
+0.25 seconds between paragraphs; clause and emergency word-boundary splits use
+0.06 and 0.04 seconds respectively.
 
 ### English and Spanish number normalization
 
