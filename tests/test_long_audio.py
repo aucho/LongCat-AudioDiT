@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from long_audio import segment_text, stitch_audio_files
+from utils.long_audio import segment_text, stitch_audio_files
 
 
 class SegmentTextTest(unittest.TestCase):
@@ -67,8 +67,8 @@ class StitchAudioTest(unittest.TestCase):
                 Path(command[-1]).write_bytes(b"mp3")
                 return subprocess.CompletedProcess(command, 0)
 
-            with patch("long_audio.shutil.which", return_value="ffmpeg"), patch(
-                "long_audio.subprocess.run", side_effect=fake_run
+            with patch("utils.long_audio.shutil.which", return_value="ffmpeg"), patch(
+                "utils.long_audio.subprocess.run", side_effect=fake_run
             ) as run:
                 result = stitch_audio_files(
                     [first, second], ["sentence", "paragraph"], output

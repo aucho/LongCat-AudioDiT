@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from utils import approx_duration_from_text
+from .text import approx_duration_from_text
 
 
 SUPPORTED_LANGUAGES = {"en", "es"}

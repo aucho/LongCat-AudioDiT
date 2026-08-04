@@ -98,22 +98,24 @@ pip install -r requirements.txt
 
 ```bash
 # TTS
-python inference.py --text "今天晴暖转阴雨，空气质量优至良，空气相对湿度较低。" --output_audio output.wav --model_dir meituan-longcat/LongCat-AudioDiT-1B
+python inference.py --text "I have 12.5 apples." --language en --output_audio output.wav --model_dir meituan-longcat/LongCat-AudioDiT-3.5B
 
 # Voice cloning
 python inference.py \
-    --text "今天晴暖转阴雨，空气质量优至良，空气相对湿度较低。" \
-    --prompt_text "小偷却一点也不气馁，继续在抽屉里翻找。" \
+    --text "I have 12.5 apples." \
+    --prompt_text "This is the exact sample transcript." \
     --prompt_audio assets/prompt.wav \
     --output_audio output.wav \
-    --model_dir meituan-longcat/LongCat-AudioDiT-1B \
+    --model_dir meituan-longcat/LongCat-AudioDiT-3.5B \
+    --language en \
     --guidance_method apg
 
 # Batch inference (SeedTTS eval format, one item per line: uid|prompt_text|prompt_wav_path|gen_text)
 python batch_inference.py \
     --lst /path/to/meta.lst \
     --output_dir /path/to/output \
-    --model_dir meituan-longcat/LongCat-AudioDiT-1B \
+    --model_dir meituan-longcat/LongCat-AudioDiT-3.5B \
+    --language en \
     --guidance_method apg
 ```
 
@@ -141,6 +143,43 @@ sample/transcript, then streams the temporary WAV files through FFmpeg into one
 24 kHz mono 192 kbps MP3. It is intended for functional testing; external
 inference APIs, queues, and interrupted-job recovery are not included.
 
+### English and Spanish number normalization
+
+All Gradio, CLI, batch, and service entry points verbalize common numbers before
+duration estimation and tokenization. Examples include `12,000` → `twelve
+thousand`, `12.50` → `twelve point five zero`, `12-1` → `twelve dash one`, and
+`10.2-inch` → `ten point two inch`. Spanish uses Spanish number words and
+`coma`/`guion`. Integers, decimals, signs, ordinals, percentages, and common
+length/weight/temperature units are supported.
+
+URLs, email addresses, IP addresses, dates, times, semantic versions, phone
+numbers, and mixed product identifiers are preserved because their intended
+reading is ambiguous. Normalize those formats explicitly in the calling
+application when a particular spoken form is required.
+
+Number verbalization uses the LGPL-licensed `num2words` dependency. Review its
+license against your production distribution requirements before release.
+
+### Reusable service API
+
+UI-independent generation workflows live in `services/`; stateless text,
+number, audio, segmentation, and FFmpeg helpers live in `utils/`. A future HTTP
+adapter can reuse the same loaded service without importing Gradio:
+
+```python
+from services import AudioDiTService
+
+service = AudioDiTService.from_pretrained(
+    "meituan-longcat/LongCat-AudioDiT-3.5B", device="cuda:0"
+)
+sample_rate, waveform = service.generate_voice_clone(
+    "I have 12.5 apples.",
+    "sample.wav",
+    "This sample contains 10 words.",
+    language="en",
+)
+```
+
 ## Inference (Python API)
 
 ### 1. TTS
@@ -151,7 +190,7 @@ from transformers import AutoTokenizer
 import torch, soundfile as sf
 
 # Load model
-model = AudioDiTModel.from_pretrained("meituan-longcat/LongCat-AudioDiT-1B").to("cuda")
+model = AudioDiTModel.from_pretrained("meituan-longcat/LongCat-AudioDiT-3.5B").to("cuda")
 model.vae.to_half()  # VAE runs in fp16 (matching original)
 model.eval()
 
