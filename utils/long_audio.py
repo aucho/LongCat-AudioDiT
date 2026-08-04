@@ -258,7 +258,7 @@ def stitch_audio_files(
         for index, (source, boundary) in enumerate(zip(sources, boundaries)):
             processed = temp_dir / f"{index:06d}.wav"
             pause = 0.0 if index == len(sources) - 1 else BOUNDARY_PAUSES[boundary]
-            _prepare_wav(source, processed, pause, sample_rate, fade_seconds=0.01)
+            _prepare_wav(source, processed, pause, sample_rate, fade_seconds=0.00)
             concat_lines.append(f"file '{processed.name}'")
 
         concat_file = temp_dir / "concat.txt"
