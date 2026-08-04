@@ -10,16 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from app_config import BOUNDARY_PAUSES
 from .text import approx_duration_from_text
 
 
 SUPPORTED_LANGUAGES = {"en", "es"}
-BOUNDARY_PAUSES = {
-    "paragraph": 0.13,
-    "sentence": 0.11,
-    "clause": 0.09,
-    "word": 0.05,
-}
 
 _ABBREVIATIONS = {
     "en": {

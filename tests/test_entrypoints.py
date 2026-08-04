@@ -3,6 +3,7 @@ import unittest
 import batch_inference
 import gradio_app
 import inference
+from app_config import MAX_GENERATION_SECONDS, SEGMENT_SLIDER_MAX_SECONDS
 from services import DEFAULT_MODEL_DIR
 
 
@@ -12,6 +13,8 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(args.model_dir, DEFAULT_MODEL_DIR)
         self.assertEqual(args.host, "0.0.0.0")
         self.assertEqual(args.port, 7860)
+        self.assertEqual(MAX_GENERATION_SECONDS, 180)
+        self.assertEqual(SEGMENT_SLIDER_MAX_SECONDS, 180)
 
     def test_cli_language_defaults(self):
         inference_args = inference.parse_args(

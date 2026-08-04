@@ -8,12 +8,15 @@ from pathlib import Path
 
 import soundfile as sf
 
-from services import (
-    AudioDiTService,
+from app_config import (
+    DEFAULT_GUIDANCE_METHOD,
+    DEFAULT_GUIDANCE_STRENGTH,
+    DEFAULT_LANGUAGE,
     DEFAULT_MODEL_DIR,
+    DEFAULT_ODE_STEPS,
     DEFAULT_SPEECH_RATE,
-    resolve_device,
 )
+from services import AudioDiTService, resolve_device
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -22,13 +25,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--model_dir", default=DEFAULT_MODEL_DIR)
     parser.add_argument("--device", default=None)
-    parser.add_argument("--language", choices=["en", "es"], default="en")
+    parser.add_argument("--language", choices=["en", "es"], default=DEFAULT_LANGUAGE)
     parser.add_argument("--seed", type=int, default=1024)
-    parser.add_argument("--nfe", type=int, default=16)
-    parser.add_argument("--guidance_strength", type=float, default=4.0)
+    parser.add_argument("--nfe", type=int, default=DEFAULT_ODE_STEPS)
+    parser.add_argument(
+        "--guidance_strength", type=float, default=DEFAULT_GUIDANCE_STRENGTH
+    )
     parser.add_argument("--speech_rate", type=float, default=DEFAULT_SPEECH_RATE)
     parser.add_argument(
-        "--guidance_method", default="cfg", choices=["cfg", "apg"]
+        "--guidance_method", default=DEFAULT_GUIDANCE_METHOD, choices=["cfg", "apg"]
     )
     return parser.parse_args(argv)
 

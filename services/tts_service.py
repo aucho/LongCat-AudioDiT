@@ -10,6 +10,17 @@ from typing import Optional
 import numpy as np
 import soundfile as sf
 import torch
+from app_config import (
+    DEFAULT_GUIDANCE_METHOD,
+    DEFAULT_GUIDANCE_STRENGTH,
+    DEFAULT_MAX_SEGMENT_SECONDS,
+    DEFAULT_MODEL_DIR,
+    DEFAULT_MP3_BITRATE,
+    DEFAULT_ODE_STEPS,
+    DEFAULT_SPEECH_RATE,
+    DEFAULT_TARGET_SEGMENT_SECONDS,
+    MAX_GENERATION_SECONDS,
+)
 from utils import (
     TextSegment,
     approx_duration_from_text,
@@ -21,10 +32,6 @@ from utils import (
 )
 
 
-DEFAULT_MODEL_DIR = "meituan-longcat/LongCat-AudioDiT-3.5B"
-DEFAULT_SPEECH_RATE = 1.3
-
-
 def resolve_device(device_name: Optional[str] = None) -> torch.device:
     if device_name:
         return torch.device(device_name)
@@ -34,10 +41,21 @@ def resolve_device(device_name: Optional[str] = None) -> torch.device:
 class AudioDiTService:
     """Own one loaded model and expose UI-independent generation operations."""
 
-    def __init__(self, model, tokenizer, device: torch.device | str):
+    def __init__(
+        self,
+        model,
+        tokenizer,
+        device: torch.device | str,
+        max_generation_seconds: float = MAX_GENERATION_SECONDS,
+    ):
         self.model = model
         self.tokenizer = tokenizer
         self.device = torch.device(device)
+        self.max_generation_seconds = float(max_generation_seconds)
+        if self.max_generation_seconds <= 0:
+            raise ValueError("max_generation_seconds must be greater than 0")
+        # AudioDiT.forward applies this config value as its final hard cap.
+        self.model.config.max_wav_duration = self.max_generation_seconds
 
     @classmethod
     def from_pretrained(
@@ -87,9 +105,9 @@ class AudioDiTService:
         language: str = "en",
         prompt_audio_path: Optional[str] = None,
         prompt_text: Optional[str] = None,
-        steps: int = 16,
-        guidance_method: str = "cfg",
-        guidance_strength: float = 4.0,
+        steps: int = DEFAULT_ODE_STEPS,
+        guidance_method: str = DEFAULT_GUIDANCE_METHOD,
+        guidance_strength: float = DEFAULT_GUIDANCE_STRENGTH,
         speech_rate: float = DEFAULT_SPEECH_RATE,
         seed: Optional[int] = None,
     ) -> tuple[int, np.ndarray]:
@@ -189,8 +207,8 @@ class AudioDiTService:
         self,
         text: str,
         language: str,
-        target_seconds: float = 15.0,
-        max_seconds: float = 20.0,
+        target_seconds: float = DEFAULT_TARGET_SEGMENT_SECONDS,
+        max_seconds: float = DEFAULT_MAX_SEGMENT_SECONDS,
     ) -> list[TextSegment]:
         spoken_text = self._spoken_text(text, language, "text")
         return segment_text(spoken_text, language, target_seconds, max_seconds)
@@ -233,14 +251,14 @@ class AudioDiTService:
         language: str,
         prompt_audio_path: str,
         prompt_text: str,
-        target_seconds: float = 15.0,
-        max_seconds: float = 20.0,
-        steps: int = 16,
-        guidance_method: str = "cfg",
-        guidance_strength: float = 4.0,
+        target_seconds: float = DEFAULT_TARGET_SEGMENT_SECONDS,
+        max_seconds: float = DEFAULT_MAX_SEGMENT_SECONDS,
+        steps: int = DEFAULT_ODE_STEPS,
+        guidance_method: str = DEFAULT_GUIDANCE_METHOD,
+        guidance_strength: float = DEFAULT_GUIDANCE_STRENGTH,
         speech_rate: float = DEFAULT_SPEECH_RATE,
         seed: int = 1024,
-        bitrate: str = "192k",
+        bitrate: str = DEFAULT_MP3_BITRATE,
     ) -> tuple[list[TextSegment], Path]:
         self._required(prompt_audio_path, "prompt audio")
         self._required(prompt_text, "prompt transcript")

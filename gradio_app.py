@@ -7,12 +7,20 @@ from typing import Optional
 
 import gradio as gr
 
-from services import (
-    AudioDiTService,
+from app_config import (
+    DEFAULT_GUIDANCE_METHOD,
+    DEFAULT_GUIDANCE_STRENGTH,
+    DEFAULT_HOST,
+    DEFAULT_LANGUAGE,
+    DEFAULT_MAX_SEGMENT_SECONDS,
     DEFAULT_MODEL_DIR,
+    DEFAULT_ODE_STEPS,
+    DEFAULT_PORT,
     DEFAULT_SPEECH_RATE,
-    resolve_device,
+    DEFAULT_TARGET_SEGMENT_SECONDS,
+    SEGMENT_SLIDER_MAX_SECONDS,
 )
+from services import AudioDiTService, resolve_device
 from utils import TextSegment
 
 
@@ -116,15 +124,23 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
         with gr.Row():
             language = gr.Radio(
                 [("English", "en"), ("Español", "es")],
-                value="en",
+                value=DEFAULT_LANGUAGE,
                 label="Language",
             )
-            steps = gr.Slider(2, 32, value=16, step=1, label="ODE steps")
+            steps = gr.Slider(
+                2, 32, value=DEFAULT_ODE_STEPS, step=1, label="ODE steps"
+            )
             guidance_method = gr.Radio(
-                ["cfg", "apg"], value="cfg", label="Guidance method"
+                ["cfg", "apg"],
+                value=DEFAULT_GUIDANCE_METHOD,
+                label="Guidance method",
             )
             guidance_strength = gr.Slider(
-                0, 8, value=4.0, step=0.1, label="Guidance strength"
+                0,
+                8,
+                value=DEFAULT_GUIDANCE_STRENGTH,
+                step=0.1,
+                label="Guidance strength",
             )
             speech_rate = gr.Slider(
                 0.8,
@@ -184,10 +200,20 @@ def create_demo(service: Optional[AudioDiTService] = None) -> gr.Blocks:
             long_text = gr.Textbox(label="Long text", lines=10)
             with gr.Row():
                 target_seconds = gr.Slider(
-                    5, 18, value=15, step=1, label="Target segment seconds"
+                    5,
+                    SEGMENT_SLIDER_MAX_SECONDS,
+                    value=DEFAULT_TARGET_SEGMENT_SECONDS,
+                    step=1,
+                    label="Target segment seconds",
+                    info="Keep this no greater than the maximum segment duration.",
                 )
                 max_seconds = gr.Slider(
-                    8, 20, value=20, step=1, label="Maximum segment seconds"
+                    8,
+                    SEGMENT_SLIDER_MAX_SECONDS,
+                    value=DEFAULT_MAX_SEGMENT_SECONDS,
+                    step=1,
+                    label="Maximum segment seconds",
+                    info="The model and reference-audio budget may reduce this value.",
                 )
             long_prompt_audio = gr.Audio(
                 label="Sample audio (required)", type="filepath"
@@ -244,8 +270,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--device", default=None, help="Torch device, defaults to CUDA when available"
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Host interface to bind")
-    parser.add_argument("--port", default=7860, type=int, help="TCP port to bind")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="Host interface to bind")
+    parser.add_argument("--port", default=DEFAULT_PORT, type=int, help="TCP port to bind")
     return parser.parse_args(argv)
 
 

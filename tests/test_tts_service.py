@@ -6,6 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
+from app_config import MAX_GENERATION_SECONDS
 from services import AudioDiTService
 
 
@@ -58,6 +59,11 @@ class AudioDiTServiceTest(unittest.TestCase):
         )
         self.assertIsNone(self.model.calls[-1]["prompt_audio"])
         self.assertGreater(self.model.calls[-1]["duration"], 10)
+
+    def test_service_applies_central_generation_limit_to_model(self):
+        self.assertEqual(
+            self.model.config.max_wav_duration, MAX_GENERATION_SECONDS
+        )
 
     def test_default_speech_rate_is_slightly_faster(self):
         self.service.generate_tts("This is a sentence.", speech_rate=1.0)

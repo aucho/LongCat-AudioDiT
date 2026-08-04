@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from app_config import BOUNDARY_PAUSES
 from utils.long_audio import segment_text, stitch_audio_files
 
 
@@ -67,9 +68,12 @@ class StitchAudioTest(unittest.TestCase):
                 first_processed, first_rate = sf.read(
                     Path(cwd) / "000000.wav", dtype="float32"
                 )
-                # 240 source samples plus the 0.12-second sentence pause.
+                # Source samples plus the centrally configured sentence pause.
                 self.assertEqual(first_rate, 24000)
-                self.assertEqual(len(first_processed), 240 + int(0.12 * 24000))
+                self.assertEqual(
+                    len(first_processed),
+                    240 + int(BOUNDARY_PAUSES["sentence"] * 24000),
+                )
                 Path(command[-1]).write_bytes(b"mp3")
                 return subprocess.CompletedProcess(command, 0)
 
