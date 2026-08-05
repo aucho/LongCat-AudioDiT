@@ -1,5 +1,6 @@
-# NVIDIA CUDA 12.4 wheels for the A10 deployment. PyPI remains the primary
-# index for the remaining packages.
+# Use public PyPI for general dependencies even when the host has a custom
+# pip mirror configured; fetch CUDA wheels from the official PyTorch index.
+--index-url https://pypi.org/simple
 --extra-index-url https://download.pytorch.org/whl/cu124
 
 transformers>=5.3.0
