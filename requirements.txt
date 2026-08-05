@@ -1,6 +1,11 @@
+# NVIDIA CUDA 12.4 wheels for the A10 deployment. PyPI remains the primary
+# index for the remaining packages.
+--extra-index-url https://download.pytorch.org/whl/cu124
+
 transformers>=5.3.0
-torch>=2.0.0
-torchaudio>=2.0.0
+# Keep PyTorch and TorchAudio paired and require the CUDA, not CPU, build.
+torch==2.6.0+cu124
+torchaudio==2.6.0+cu124
 safetensors>=0.4.0
 librosa>=0.10.0
 soundfile>=0.12.0

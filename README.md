@@ -90,9 +90,29 @@ LongCat-AudioDiT obtains state-of-the-art (SOTA) voice cloning performance on th
 
 ## Installation
 
+For a Linux NVIDIA host whose driver supports CUDA 12.4 (for example, an A10
+with driver 550.127.08), use Python 3.11. `requirements.txt` selects the
+matched PyTorch and TorchAudio CUDA wheels from the official PyTorch index:
+
 ```bash
-pip install -r requirements.txt
+/root/miniconda3/bin/conda create --prefix /opt/longcat-venv python=3.11 -y
+/opt/longcat-venv/bin/python -m pip install --upgrade pip
+/opt/longcat-venv/bin/python -m pip install -r requirements.txt
 ```
+
+The PyTorch wheel includes its CUDA runtime; the host does not need a separate
+CUDA Toolkit installation for this service. Ubuntu still needs FFmpeg and
+libsndfile at runtime:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ffmpeg libsndfile1
+/opt/longcat-venv/bin/python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+The final command should report PyTorch `2.6.0+cu124`, CUDA `12.4`, `True`, and the
+NVIDIA GPU name. Keep `torch` and `torchaudio` on the same version when changing
+this deployment profile.
 
 ## CLI Inference
 
@@ -249,8 +269,8 @@ The service is intended for a trusted LAN and does not include authentication.
 The repository includes a production-oriented single-process systemd unit in
 `deploy/systemd/longcat-audiodit.service`. Its default paths assume:
 
-- repository: `/opt/LongCat-AudioDiT`
-- Conda environment Python: `/opt/miniconda3/envs/longcat/bin/python`
+- repository: `/etc/web/LongCat-AudioDiT`
+- Conda environment Python: `/opt/longcat-venv/bin/python`
 - service account: `longcat`
 - persistent API data: `/var/lib/longcat-audiodit`
 - Hugging Face cache: `/var/cache/longcat-audiodit/huggingface`

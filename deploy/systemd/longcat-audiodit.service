@@ -10,10 +10,10 @@ StartLimitBurst=5
 Type=simple
 User=longcat
 Group=longcat
-WorkingDirectory=/opt/LongCat-AudioDiT
+WorkingDirectory=/etc/web/LongCat-AudioDiT
 EnvironmentFile=/etc/longcat-audiodit.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/miniconda3/envs/longcat/bin/python -u api_app.py --model_dir ${LONGCAT_MODEL_DIR} --device ${LONGCAT_DEVICE} --host ${LONGCAT_HOST} --port ${LONGCAT_PORT} --data_dir ${LONGCAT_DATA_DIR} --result_ttl_hours ${LONGCAT_RESULT_TTL_HOURS} --max_pending_tasks ${LONGCAT_MAX_PENDING_TASKS}
+ExecStart=/opt/longcat-venv/bin/python -u api_app.py --model_dir ${LONGCAT_MODEL_DIR} --device ${LONGCAT_DEVICE} --host ${LONGCAT_HOST} --port ${LONGCAT_PORT} --data_dir ${LONGCAT_DATA_DIR} --result_ttl_hours ${LONGCAT_RESULT_TTL_HOURS} --max_pending_tasks ${LONGCAT_MAX_PENDING_TASKS}
 
 Restart=always
 RestartSec=10
