@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from app_config import BOUNDARY_PAUSES
+from app_config import BOUNDARY_PAUSES, DEFAULT_FADE_SECONDS
 from .text import approx_duration_from_text
 
 
@@ -233,6 +233,7 @@ def stitch_audio_files(
     bitrate: str = "192k",
     sample_rate: int = 24000,
     ffmpeg_bin: str = "ffmpeg",
+    fade_seconds: float = DEFAULT_FADE_SECONDS,
 ) -> Path:
     """Stream ordered audio files through FFmpeg into one compressed MP3."""
     if not files:
@@ -258,7 +259,7 @@ def stitch_audio_files(
         for index, (source, boundary) in enumerate(zip(sources, boundaries)):
             processed = temp_dir / f"{index:06d}.wav"
             pause = 0.0 if index == len(sources) - 1 else BOUNDARY_PAUSES[boundary]
-            _prepare_wav(source, processed, pause, sample_rate, fade_seconds=0.00)
+            _prepare_wav(source, processed, pause, sample_rate, fade_seconds=fade_seconds)
             concat_lines.append(f"file '{processed.name}'")
 
         concat_file = temp_dir / "concat.txt"

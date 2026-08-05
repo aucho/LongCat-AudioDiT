@@ -1,0 +1,41 @@
+[Unit]
+Description=LongCat AudioDiT asynchronous API
+Documentation=https://github.com/meituan-longcat/LongCat-AudioDiT
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=longcat
+Group=longcat
+WorkingDirectory=/opt/LongCat-AudioDiT
+EnvironmentFile=/etc/longcat-audiodit.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/miniconda3/envs/longcat/bin/python -u api_app.py --model_dir ${LONGCAT_MODEL_DIR} --device ${LONGCAT_DEVICE} --host ${LONGCAT_HOST} --port ${LONGCAT_PORT} --data_dir ${LONGCAT_DATA_DIR} --result_ttl_hours ${LONGCAT_RESULT_TTL_HOURS} --max_pending_tasks ${LONGCAT_MAX_PENDING_TASKS}
+
+Restart=always
+RestartSec=10
+TimeoutStartSec=infinity
+TimeoutStopSec=300
+KillSignal=SIGTERM
+LimitNOFILE=65536
+UMask=0077
+
+# systemd creates these directories and assigns them to User/Group.
+StateDirectory=longcat-audiodit
+CacheDirectory=longcat-audiodit
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

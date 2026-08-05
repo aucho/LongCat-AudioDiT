@@ -142,12 +142,15 @@ each segment with the locally loaded model and the same required voice-cloning
 sample/transcript, then streams the temporary WAV files through FFmpeg into one
 24 kHz mono 192 kbps MP3. It is intended for functional testing; external
 inference APIs, queues, and interrupted-job recovery are not included.
-Long-text stitching adds compact pauses of 0.10 seconds between sentences and
-paragraphs; clause and emergency word-boundary splits use 0.09 and 0.05 seconds
-respectively.
+Long-text stitching currently adds no synthetic boundary pause and no fade. Both
+behaviors are controlled centrally in `app_config.py`.
 The Gradio target and maximum segment-duration sliders allow testing up to 180
 seconds. During this test phase the service also overrides the model's runtime
 duration cap to 180 seconds, then subtracts the reference-audio budget.
+For the A20 24 GB deployment profile, the shared defaults target 50-second text
+segments with a 60-second maximum. At the default 1.25 speech rate, their actual
+generated audio is typically shorter. The 180-second value is only a per-model-
+call window; it is not a total MP3 duration limit.
 
 Shared model, generation, segmentation, pause, UI, and CLI defaults are defined
 in `app_config.py`. Change that file when tuning test defaults so every entry
@@ -187,15 +190,103 @@ sample_rate, waveform = service.generate_voice_clone(
     "sample.wav",
     "This sample contains 10 words.",
     language="en",
-    speech_rate=1.3,
+    speech_rate=1.25,
 )
 ```
 
-The default `speech_rate` is `1.3`, which shortens only the generated portion's
+The default `speech_rate` is `1.25`, which shortens only the generated portion's
 target duration and aims for roughly 180 words per minute on typical English or
-Spanish prose. Use `1.0` for the checkpoint's original pace. The Gradio page
-exposes a `0.8`–`1.3` test slider; CLI and batch inference accept
-`--speech_rate`.
+Spanish prose. Use `1.0` for the checkpoint's original pace. Gradio, CLI and
+batch inference expose `speech_rate` for testing.
+
+## Asynchronous API
+
+The API and Gradio entry points are independent. The API loads one model at
+startup and processes all generation jobs through a single FIFO worker:
+
+```bash
+python api_app.py --device cuda:0 --host 0.0.0.0 --port 7861 \
+  --data_dir data/longcat_api --result_ttl_hours 24 --max_pending_tasks 20
+```
+
+Only one Uvicorn worker is supported. References are cached by ID and retained;
+terminal task manifests and MP3 results are removed 24 hours after completion by
+default. Completed results survive service restarts, while interrupted pending
+or processing jobs are marked failed and may be submitted again.
+
+The Ubuntu host must provide `ffmpeg` and `ffprobe` on `PATH`. Reference uploads
+are streamed to the configured data filesystem, limited to 50 MiB and 60
+seconds, validated, and stored once as 24 kHz mono PCM WAV. Reference transcripts
+are limited to 10,000 characters. Generation requests accept up to 2,000,000
+characters, but there is no estimated-duration or final-MP3 duration limit.
+
+The LAN API contract is:
+
+- `POST /v1/references/add`: multipart fields `id`, `audio`, and exact `text`;
+  returns `content_sha256` and `reused`. Reusing an ID with different content
+  returns HTTP 409.
+- `POST /generate_audio_enhanced_async`: JSON fields `step_id`, `text`,
+  `language` (`en` or `es`), `reference_id`, plus optional inference settings.
+- `GET /get_task_status?step_id=...`: task state, timestamps, progress and error.
+- `GET /download_result?step_id=...`: completed 24 kHz mono 192 kbps MP3.
+- `POST /stop_async_task/{step_id}`: pending cancellation or a cancellation
+  request observed at the next segment boundary. A processing response includes
+  `cancel_requested: true` and must still be polled to a terminal state.
+- `GET /v1/health`: model/device readiness, worker and cleaner state, active
+  task, real pending count and background errors. It returns HTTP 503 when the
+  model or durable worker is not ready.
+
+Resource IDs are portable file-safe identifiers containing only letters,
+numbers, `.`, `_`, and `-`. Path separators, `..`, trailing dots, control
+characters, and Windows device names are rejected. Persisted result/reference
+paths are resolved and constrained to their configured data directories before
+every read, download, retry, cleanup, or deletion.
+
+The service is intended for a trusted LAN and does not include authentication.
+
+### Ubuntu systemd service and boot startup
+
+The repository includes a production-oriented single-process systemd unit in
+`deploy/systemd/longcat-audiodit.service`. Its default paths assume:
+
+- repository: `/opt/LongCat-AudioDiT`
+- Conda environment Python: `/opt/miniconda3/envs/longcat/bin/python`
+- service account: `longcat`
+- persistent API data: `/var/lib/longcat-audiodit`
+- Hugging Face cache: `/var/cache/longcat-audiodit/huggingface`
+
+Change `WorkingDirectory` and `ExecStart` in the unit if the repository or
+Conda installation uses different paths. Install and enable it with:
+
+```bash
+sudo useradd --system --home-dir /var/lib/longcat-audiodit \
+  --shell /usr/sbin/nologin longcat
+sudo cp deploy/systemd/longcat-audiodit.env.example /etc/longcat-audiodit.env
+sudo cp deploy/systemd/longcat-audiodit.service /etc/systemd/system/
+sudo chown root:longcat /etc/longcat-audiodit.env
+sudo chmod 0640 /etc/longcat-audiodit.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now longcat-audiodit.service
+```
+
+`enable --now` starts the API immediately and registers it for subsequent
+boots. The unit uses one API process and one inference worker, restarts after an
+unexpected process exit, waits for network availability, and gives an active
+generation up to five minutes to stop cleanly. systemd creates the state and
+cache directories with service-account ownership; process logs go to journald.
+
+Check service state, health, and logs with:
+
+```bash
+systemctl status longcat-audiodit.service
+curl --fail-with-body http://127.0.0.1:7861/v1/health
+journalctl -u longcat-audiodit.service -f
+```
+
+After changing the environment file, restart the process with
+`sudo systemctl restart longcat-audiodit.service`. Model-load failures remain
+visible through `/v1/health` as HTTP 503; systemd automatically restarts actual
+process crashes, but it does not treat an HTTP 503 as a crashed process.
 
 ## Inference (Python API)
 

@@ -6,8 +6,8 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from app_config import MAX_GENERATION_SECONDS
-from services import AudioDiTService
+from app_config import DEFAULT_SPEECH_RATE, MAX_GENERATION_SECONDS
+from services import AudioDiTService, GenerationCancelledError
 
 
 class _Tokenizer:
@@ -129,7 +129,35 @@ class AudioDiTServiceTest(unittest.TestCase):
         for call in generate.call_args_list:
             self.assertEqual(call.args[1], "sample.wav")
             self.assertEqual(call.args[2], "Sample transcript.")
-            self.assertEqual(call.kwargs["speech_rate"], 1.3)
+            self.assertEqual(call.kwargs["speech_rate"], DEFAULT_SPEECH_RATE)
+
+    @patch("services.tts_service.load_audio", return_value=torch.zeros(1, 2048))
+    def test_long_audio_stops_at_segment_boundary(self, load_audio):
+        del load_audio
+        progress = []
+        cancelled = [False]
+
+        def generate(*args, **kwargs):
+            del args, kwargs
+            cancelled[0] = True
+            return 24000, np.zeros(16, dtype=np.float32)
+
+        with patch.object(self.service, "generate_voice_clone", side_effect=generate):
+            with self.assertRaises(GenerationCancelledError):
+                self.service.generate_long_audio(
+                    "First sentence. Second sentence.",
+                    "en",
+                    "sample.wav",
+                    "Sample transcript.",
+                    target_seconds=2,
+                    max_seconds=3,
+                    should_cancel=lambda: cancelled[0],
+                    progress_callback=lambda current, total: progress.append(
+                        (current, total)
+                    ),
+                )
+        self.assertTrue(progress)
+        self.assertEqual(progress[0][0], 0)
 
     def test_long_audio_requires_voice_clone_inputs(self):
         with self.assertRaisesRegex(ValueError, "prompt audio"):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import soundfile as sf
@@ -18,8 +18,11 @@ from app_config import (
     DEFAULT_MP3_BITRATE,
     DEFAULT_ODE_STEPS,
     DEFAULT_SPEECH_RATE,
+    DEFAULT_SEED,
     DEFAULT_TARGET_SEGMENT_SECONDS,
     MAX_GENERATION_SECONDS,
+    MAX_GENERATION_TEXT_CHARS,
+    MAX_REFERENCE_TEXT_CHARS,
 )
 from utils import (
     TextSegment,
@@ -30,6 +33,10 @@ from utils import (
     segment_text,
     stitch_audio_files,
 )
+
+
+class GenerationCancelledError(RuntimeError):
+    """Raised when a long-running generation is cancelled between segments."""
 
 
 def resolve_device(device_name: Optional[str] = None) -> torch.device:
@@ -92,11 +99,36 @@ class AudioDiTService:
 
     def _spoken_text(self, text: str, language: str, field_name: str) -> str:
         source = self._required(text, field_name)
+        source_limit = (
+            MAX_REFERENCE_TEXT_CHARS
+            if field_name == "prompt transcript"
+            else MAX_GENERATION_TEXT_CHARS
+        )
+        if len(source) > source_limit:
+            raise ValueError(f"{field_name} exceeds {source_limit} characters")
         spoken = normalize_tts_text(source, language).spoken_text
         normalized = normalize_text(spoken)
         if not normalized:
             raise ValueError(f"{field_name} cannot be empty")
+        if len(normalized) > source_limit:
+            raise ValueError(
+                f"normalized {field_name} exceeds {source_limit} characters"
+            )
         return normalized
+
+    def normalize_spoken_text(
+        self, text: str, language: str, field_name: str = "text"
+    ) -> str:
+        """Validate and normalize text before a task is admitted to the queue."""
+        return self._spoken_text(text, language, field_name)
+
+    @property
+    def is_ready(self) -> bool:
+        return self.model is not None and self.tokenizer is not None
+
+    @property
+    def model_name(self) -> str:
+        return str(getattr(self.model.config, "name_or_path", DEFAULT_MODEL_DIR))
 
     @torch.inference_mode()
     def generate_audio(
@@ -257,8 +289,10 @@ class AudioDiTService:
         guidance_method: str = DEFAULT_GUIDANCE_METHOD,
         guidance_strength: float = DEFAULT_GUIDANCE_STRENGTH,
         speech_rate: float = DEFAULT_SPEECH_RATE,
-        seed: int = 1024,
+        seed: int = DEFAULT_SEED,
         bitrate: str = DEFAULT_MP3_BITRATE,
+        should_cancel: Callable[[], bool] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> tuple[list[TextSegment], Path]:
         self._required(prompt_audio_path, "prompt audio")
         self._required(prompt_text, "prompt transcript")
@@ -269,12 +303,17 @@ class AudioDiTService:
         segments = self.preview_long_text(
             text, language, effective_target, effective_max
         )
+        total_segments = len(segments)
+        if progress_callback:
+            progress_callback(0, total_segments)
 
         job_dir = Path(tempfile.mkdtemp(prefix="longcat_long_"))
         wav_files: list[Path] = []
         success = False
         try:
             for index, segment in enumerate(segments):
+                if should_cancel and should_cancel():
+                    raise GenerationCancelledError("generation cancelled")
                 sample_rate, waveform = self.generate_voice_clone(
                     segment.text,
                     prompt_audio_path,
@@ -286,10 +325,16 @@ class AudioDiTService:
                     speech_rate=speech_rate,
                     seed=seed,
                 )
+                if should_cancel and should_cancel():
+                    raise GenerationCancelledError("generation cancelled")
                 wav_path = job_dir / f"segment_{index:06d}.wav"
                 sf.write(wav_path, waveform, sample_rate, subtype="PCM_16")
                 wav_files.append(wav_path)
+                if progress_callback:
+                    progress_callback(index + 1, total_segments)
 
+            if should_cancel and should_cancel():
+                raise GenerationCancelledError("generation cancelled")
             output_mp3 = job_dir / "longcat_output.mp3"
             stitch_audio_files(
                 wav_files,
@@ -309,6 +354,7 @@ class AudioDiTService:
 
 __all__ = [
     "AudioDiTService",
+    "GenerationCancelledError",
     "DEFAULT_MODEL_DIR",
     "DEFAULT_SPEECH_RATE",
     "resolve_device",
