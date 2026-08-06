@@ -262,8 +262,9 @@ The repository includes a production-oriented single-process systemd unit in
 `deploy/systemd/longcat-audiodit.service`. Its default paths assume:
 
 - repository: `/etc/web/LongCat-AudioDiT`
-- Conda environment Python: `/opt/longcat-venv/bin/python`
-- service account: `longcat`
+- Conda environment Python: `/root/miniconda3/envs/longcat/bin/python`
+- service account: `root`
+- local model: `/var/lib/longcat-audiodit/models/LongCat-AudioDiT-3.5B`
 - persistent API data: `/var/lib/longcat-audiodit`
 - Hugging Face cache: `/var/cache/longcat-audiodit/huggingface`
 
@@ -271,21 +272,20 @@ Change `WorkingDirectory` and `ExecStart` in the unit if the repository or
 Conda installation uses different paths. Install and enable it with:
 
 ```bash
-sudo useradd --system --home-dir /var/lib/longcat-audiodit \
-  --shell /usr/sbin/nologin longcat
-sudo cp deploy/systemd/longcat-audiodit.env.example /etc/longcat-audiodit.env
-sudo cp deploy/systemd/longcat-audiodit.service /etc/systemd/system/
-sudo chown root:longcat /etc/longcat-audiodit.env
-sudo chmod 0640 /etc/longcat-audiodit.env
+sudo install -m 0600 deploy/systemd/longcat-audiodit.env.example \
+  /etc/longcat-audiodit.env
+sudo install -m 0644 deploy/systemd/longcat-audiodit.service \
+  /etc/systemd/system/longcat-audiodit.service
+sudo systemd-analyze verify /etc/systemd/system/longcat-audiodit.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now longcat-audiodit.service
 ```
 
 `enable --now` starts the API immediately and registers it for subsequent
-boots. The unit uses one API process and one inference worker, restarts after an
-unexpected process exit, waits for network availability, and gives an active
-generation up to five minutes to stop cleanly. systemd creates the state and
-cache directories with service-account ownership; process logs go to journald.
+boots. The unit uses one API process and one inference worker, checks that the
+local model files exist before startup, restarts after an unexpected process
+exit, and gives an active generation up to five minutes to stop cleanly.
+systemd creates the state and cache directories; process logs go to journald.
 
 Check service state, health, and logs with:
 

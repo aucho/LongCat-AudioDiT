@@ -8,12 +8,16 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-User=longcat
-Group=longcat
+User=root
+Group=root
 WorkingDirectory=/etc/web/LongCat-AudioDiT
 EnvironmentFile=/etc/longcat-audiodit.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/longcat-venv/bin/python -u api_app.py --model_dir ${LONGCAT_MODEL_DIR} --device ${LONGCAT_DEVICE} --host ${LONGCAT_HOST} --port ${LONGCAT_PORT} --data_dir ${LONGCAT_DATA_DIR} --result_ttl_hours ${LONGCAT_RESULT_TTL_HOURS} --max_pending_tasks ${LONGCAT_MAX_PENDING_TASKS}
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=/usr/bin/test -x /root/miniconda3/envs/longcat/bin/python
+ExecStartPre=/usr/bin/test -f ${LONGCAT_MODEL_DIR}/config.json
+ExecStartPre=/usr/bin/test -f ${LONGCAT_MODEL_DIR}/model.safetensors
+ExecStart=/root/miniconda3/envs/longcat/bin/python -u api_app.py --model_dir ${LONGCAT_MODEL_DIR} --device ${LONGCAT_DEVICE} --host ${LONGCAT_HOST} --port ${LONGCAT_PORT} --data_dir ${LONGCAT_DATA_DIR} --result_ttl_hours ${LONGCAT_RESULT_TTL_HOURS} --max_pending_tasks ${LONGCAT_MAX_PENDING_TASKS}
 
 Restart=always
 RestartSec=10
@@ -23,14 +27,15 @@ KillSignal=SIGTERM
 LimitNOFILE=65536
 UMask=0077
 
-# systemd creates these directories and assigns them to User/Group.
+# systemd creates persistent state and cache directories.
 StateDirectory=longcat-audiodit
 CacheDirectory=longcat-audiodit
 
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+# The selected Conda environment is under /root/miniconda3.
+ProtectHome=false
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
