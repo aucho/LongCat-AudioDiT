@@ -1,12 +1,4 @@
-# Use public PyPI for general dependencies even when the host has a custom
-# pip mirror configured; fetch CUDA wheels from the official PyTorch index.
---index-url https://pypi.org/simple
---extra-index-url https://download.pytorch.org/whl/cu124
-
 transformers>=5.3.0
-# Keep PyTorch and TorchAudio paired and require the CUDA, not CPU, build.
-torch==2.6.0+cu124
-torchaudio==2.6.0+cu124
 safetensors>=0.4.0
 librosa>=0.10.0
 soundfile>=0.12.0
