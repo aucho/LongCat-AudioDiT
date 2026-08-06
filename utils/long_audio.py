@@ -10,7 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from app_config import BOUNDARY_PAUSES, DEFAULT_FADE_SECONDS
+from app_config import (
+    BOUNDARY_PAUSES,
+    DEFAULT_FADE_SECONDS,
+    SILENCE_TRIM_FRAME_SECONDS,
+    SILENCE_TRIM_HOP_SECONDS,
+    SILENCE_TRIM_LEADING_SECONDS,
+    SILENCE_TRIM_THRESHOLD_DBFS,
+    SILENCE_TRIM_TRAILING_SECONDS,
+)
 from .text import approx_duration_from_text
 
 
@@ -217,6 +225,8 @@ def _prepare_wav(
     if source_rate != sample_rate:
         mono = librosa.resample(mono, orig_sr=source_rate, target_sr=sample_rate)
 
+    mono = _trim_edge_silence(mono, sample_rate)
+
     fade_samples = min(int(fade_seconds * sample_rate), len(mono) // 2)
     if fade_samples:
         ramp = np.linspace(0.0, 1.0, fade_samples, endpoint=True, dtype=np.float32)
@@ -224,6 +234,44 @@ def _prepare_wav(
         mono[-fade_samples:] *= ramp[::-1]
     pause = np.zeros(int(pause_seconds * sample_rate), dtype=np.float32)
     sf.write(destination, np.concatenate([mono, pause]), sample_rate, subtype="PCM_16")
+
+
+def _trim_edge_silence(mono, sample_rate: int):
+    """Trim only leading/trailing silence while preserving interior pauses."""
+    import numpy as np
+
+    if len(mono) == 0:
+        return mono
+
+    frame_samples = max(1, int(round(SILENCE_TRIM_FRAME_SECONDS * sample_rate)))
+    hop_samples = max(1, int(round(SILENCE_TRIM_HOP_SECONDS * sample_rate)))
+    last_start = max(0, len(mono) - frame_samples)
+    starts = list(range(0, last_start + 1, hop_samples))
+    if not starts or starts[-1] != last_start:
+        starts.append(last_start)
+
+    threshold = 10.0 ** (SILENCE_TRIM_THRESHOLD_DBFS / 20.0)
+    active_starts: list[int] = []
+    for start in starts:
+        frame = mono[start : start + frame_samples]
+        if len(frame) == 0:
+            continue
+        rms = float(np.sqrt(np.mean(np.square(frame, dtype=np.float64))))
+        if np.isfinite(rms) and rms >= threshold:
+            active_starts.append(start)
+
+    # Keep an all-silent or otherwise undetectable segment unchanged so that
+    # conservative trimming cannot turn valid input into an empty file.
+    if not active_starts:
+        return mono
+
+    leading_samples = int(round(SILENCE_TRIM_LEADING_SECONDS * sample_rate))
+    trailing_samples = int(round(SILENCE_TRIM_TRAILING_SECONDS * sample_rate))
+    trim_start = max(0, active_starts[0] - leading_samples)
+    trim_end = min(
+        len(mono), active_starts[-1] + frame_samples + trailing_samples
+    )
+    return mono[trim_start:trim_end]
 
 
 def stitch_audio_files(

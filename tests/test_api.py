@@ -124,7 +124,18 @@ class ApiContractTest(unittest.TestCase):
         duplicate = self.submit("step-1").json()
         self.assertFalse(duplicate["created"])
         self.assertEqual(len(self.service.calls), 1)
-        self.assertEqual(self.service.calls[0]["speech_rate"], 1.25)
+        self.assertEqual(self.service.calls[0]["speech_rate"], 1.1)
+        self.assertEqual(self.service.calls[0]["target_seconds"], 24)
+        self.assertEqual(self.service.calls[0]["max_seconds"], 30)
+        self.assertEqual(self.service.calls[0]["steps"], 24)
+
+    def test_null_speech_rate_uses_shared_default(self):
+        self.add_reference()
+        response = self.submit("null-speed", speech_rate=None)
+        self.assertEqual(response.status_code, 200)
+        wait_for_status(self.client, "null-speed", {"completed"})
+
+        self.assertEqual(self.service.calls[0]["speech_rate"], 1.1)
 
     def test_fifo_single_worker_and_pending_cancel(self):
         self.add_reference()

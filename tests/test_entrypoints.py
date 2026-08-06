@@ -7,6 +7,7 @@ import inference
 from app_config import (
     DEFAULT_MAX_PENDING_TASKS,
     DEFAULT_MAX_SEGMENT_SECONDS,
+    DEFAULT_ODE_STEPS,
     DEFAULT_SPEECH_RATE,
     DEFAULT_TARGET_SEGMENT_SECONDS,
     MAX_GENERATION_SECONDS,
@@ -23,8 +24,10 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(args.port, 7860)
         self.assertEqual(MAX_GENERATION_SECONDS, 180)
         self.assertEqual(SEGMENT_SLIDER_MAX_SECONDS, 180)
-        self.assertEqual(DEFAULT_TARGET_SEGMENT_SECONDS, 50)
-        self.assertEqual(DEFAULT_MAX_SEGMENT_SECONDS, 60)
+        self.assertEqual(DEFAULT_TARGET_SEGMENT_SECONDS, 24)
+        self.assertEqual(DEFAULT_MAX_SEGMENT_SECONDS, 30)
+        self.assertEqual(DEFAULT_ODE_STEPS, 24)
+        self.assertEqual(DEFAULT_SPEECH_RATE, 1.1)
 
     def test_cli_language_defaults(self):
         inference_args = inference.parse_args(
@@ -36,6 +39,8 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(inference_args.language, "en")
         self.assertEqual(batch_args.language, "en")
         self.assertEqual(inference_args.model_dir, DEFAULT_MODEL_DIR)
+        self.assertEqual(inference_args.nfe, DEFAULT_ODE_STEPS)
+        self.assertEqual(batch_args.nfe, DEFAULT_ODE_STEPS)
         self.assertEqual(inference_args.speech_rate, DEFAULT_SPEECH_RATE)
         self.assertEqual(batch_args.speech_rate, DEFAULT_SPEECH_RATE)
 

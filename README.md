@@ -154,15 +154,17 @@ each segment with the locally loaded model and the same required voice-cloning
 sample/transcript, then streams the temporary WAV files through FFmpeg into one
 24 kHz mono 192 kbps MP3. It is intended for functional testing; external
 inference APIs, queues, and interrupted-job recovery are not included.
-Long-text stitching currently adds no synthetic boundary pause and no fade. Both
-behaviors are controlled centrally in `app_config.py`.
+Long-text stitching trims only excessive leading and trailing model silence,
+keeping about 50 ms at the start and 150 ms at the end of each segment. It adds
+no synthetic boundary pause and no fade. These behaviors are controlled
+centrally in `app_config.py`.
 The Gradio target and maximum segment-duration sliders allow testing up to 180
 seconds. During this test phase the service also overrides the model's runtime
 duration cap to 180 seconds, then subtracts the reference-audio budget.
-For the A20 24 GB deployment profile, the shared defaults target 50-second text
-segments with a 60-second maximum. At the default 1.25 speech rate, their actual
-generated audio is typically shorter. The 180-second value is only a per-model-
-call window; it is not a total MP3 duration limit.
+For the 24 GB deployment profile, the shared defaults target 24-second text
+segments with a 30-second maximum. The default uses 24 ODE steps and a 1.1
+speech rate for more stable segment tails. The 180-second value is only a per-
+model-call window; it is not a total MP3 duration limit.
 
 Shared model, generation, segmentation, pause, UI, and CLI defaults are defined
 in `app_config.py`. Change that file when tuning test defaults so every entry
@@ -202,14 +204,14 @@ sample_rate, waveform = service.generate_voice_clone(
     "sample.wav",
     "This sample contains 10 words.",
     language="en",
-    speech_rate=1.25,
+    speech_rate=1.1,
 )
 ```
 
-The default `speech_rate` is `1.25`, which shortens only the generated portion's
-target duration and aims for roughly 180 words per minute on typical English or
-Spanish prose. Use `1.0` for the checkpoint's original pace. Gradio, CLI and
-batch inference expose `speech_rate` for testing.
+The default `speech_rate` is `1.1`, which shortens only the generated portion's
+target duration and is slightly faster than the checkpoint's original pace.
+Use `1.0` for the original pace. Gradio, CLI and batch inference expose
+`speech_rate` for testing.
 
 ## Asynchronous API
 
@@ -322,7 +324,7 @@ output = model(
     input_ids=inputs.input_ids,
     attention_mask=inputs.attention_mask,
     duration=62,  # latent frames
-    steps=16,
+    steps=24,
     cfg_strength=4.0,
     guidance_method="cfg",  # or "apg"
 )
@@ -348,7 +350,7 @@ output = model(
     attention_mask=inputs.attention_mask,
     prompt_audio=prompt_wav,
     duration=138,  # prompt_frames + gen_frames
-    steps=16,
+    steps=24,
     cfg_strength=4.0,
     guidance_method="apg",
 )
